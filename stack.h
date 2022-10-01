@@ -1,40 +1,44 @@
 #ifndef STACK_H_INCLUDED
 #define STACK_H_INCLUDED
 
+//#define HASH_OFF
+//#define NDEBUG
+#define SAFE_MODE 0
+#define DUMP_MODE 1
 
 #ifndef NDEBUG
-    #define ASSERT_OK(stk)                                                    \
-        stk->data_hash_sum = 0;                                                      \
-        stk->data_hash_sum = calcGNUhash(stk->data, stk->capacity * sizeof(Elem_t)); \
-        stk->stack_hash_sum = 0;                                                    \
-        stk->stack_hash_sum = calcGNUhash(stk, sizeof(*stk));                 \
-        StackDump(stk)                                                        \
-        if (StackError(stk))                                                  \
-        {                                                                     \
-            printErr(stk->errors);                                            \
-            exit(0);                                                          \
+    #define ASSERT_OK(stk)                                                              \
+        stk->data_hash_sum = 0;                                                         \
+        stk->stack_hash_sum = 0;                                                        \
+        stk->stack_hash_sum = calcGNUhash(stk, sizeof(*stk));                           \
+        stk->data_hash_sum = calcGNUhash(stk->data, stk->capacity * sizeof(Elem_t));    \
+                                                                                        \
+        if (DUMP_MODE || StackError(stk))                                               \
+        {                                                                               \
+            STACK_DUMP(stk);                                                            \
+            printErr(stk->errors);                                                      \
+            if (SAFE_MODE)                                                              \
+                exit(1);                                                                \
         }
-
-
 #else
     #define ASSERT_OK(stk) ;
 #endif
 
 
-#define StackDump(stk)                                                      \
-    logprint("%s at %s(%d)\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);    \
-    if (stk == NULL)                                                        \
-        logprint("invalid stack pointer, can't dump\n");                    \
-    logprint("Stack[%p] \"%s\" at %s at %s(%d)\n", stk, stk->stk_disc.name, \
-            stk->stk_disc.func, stk->stk_disc.file, stk->stk_disc.line);    \
-    logprint("{\n");                                                        \
-    logprint("  size = %zd\n", stk->ssize);                                 \
-    logprint("  capacity = %zd\n", stk->capacity);                          \
-    logprint("  data[%p]\n", stk->data);                                    \
-    if (stk->data == NULL) {                                                \
-        logprint("invalid data pointer, cant't print stack\n");             \
-        logprint("}\n");                                                    \
-    } else {                                                                \
+#define STACK_DUMP(stk)                                                         \
+    logprint("%s at %s(%d)\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);        \
+    if (stk == NULL)                                                            \
+        logprint("invalid stack pointer, can't dump\n");                        \
+    logprint("Stack[%p] \"%s\" at %s at %s(%d)\n", stk, stk->stk_desc.name,     \
+            stk->stk_desc.func, stk->stk_desc.file, stk->stk_desc.line);        \
+    logprint("{\n");                                                            \
+    logprint("  size = %zd\n", stk->ssize);                                     \
+    logprint("  capacity = %zd\n", stk->capacity);                              \
+    logprint("  data[%p]\n", stk->data);                                        \
+    if (stk->data == NULL) {                                                    \
+        logprint("invalid data pointer, cant't print stack\n");                 \
+        logprint("}\n");                                                        \
+    } else {                                                                    \
         logprint("  {\n");                                                      \
         printStack(stk->data, stk->capacity);                                   \
         logprint("  }\n");                                                      \
@@ -48,29 +52,101 @@
     stk_desc.file = (char*)__FILE__;
 
 
-#define StackCtor(stk, scale)                                              \
-    stk.stack_canary_l = STACK_CANARY_L;                                   \
-    stk.stack_canary_r = STACK_CANARY_R;                                   \
-    SetDescription(stk, stk.stk_disc);                                     \
-    stk.capacity = scale;                                                  \
-    stk.errors = 0;                                                        \
-    stk.ssize = 0;                                                         \
-    size_t enlarged_size = scale * sizeof(Elem_t) + 2 * sizeof(ULL);       \
-    char* tmp  = (char*)(calloc(enlarged_size, sizeof(char)));              \
-    stk.data_canary_l = (ULL*)tmp;                                          \
-    stk.data_canary_r = (ULL*)(tmp + sizeof(ULL) + scale*sizeof(Elem_t));   \
-    stk.data = (Elem_t*)(tmp + sizeof(ULL));                                  \
-    *(stk.data_canary_l)= DATA_CANARY_L;                                     \
-    *(stk.data_canary_r) = DATA_CANARY_R;                                     \
-    printf("calloc done with pointer %p\n", stk.data);
+#define STACK_CTOR(stk, scale)                                                               \
+    SetDescription(stk, stk.stk_desc);                                                       \
+    StackCtor(&stk, scale);
 
 
+    //printf("calloc done with pointer %p\n", stk.data);
 
-
-
+#ifndef HASH_OFF
+    #define CHECK_HASH_SUM(stk)                                                                       \
+        if(checkHash(&stk) != 0) {                                                                    \
+             printf("in %s in %s(%d)\n\n",__FILE__, __PRETTY_FUNCTION__, __LINE__);                   \
+             if (SAFE_MODE)                                                                           \
+                exit(2);                                                                              \
+        }
+#else
+    #define CHECK_HASH_SUM(stk) ;
+#endif
 
 typedef int Elem_t;
-typedef unsigned long long ULL;
+typedef unsigned long long UnsignedLL;
 
+void StackCtor(struct Stack *stk, size_t scale);
+void StackDtor(struct Stack *stk);
+UnsignedLL calcGNUhash(void* start_ptr, int num_bytes);
+
+void printStack(int *data, size_t capacity);
+void printStack(double *data, size_t capacity);
+void printStack(char *data, size_t capacity);
+
+int getPoison(int);
+double getPoison(double);
+size_t getPoison(size_t);
+char getPoison(char);
+char *getPoison(char*);
+
+Elem_t StackPop(struct Stack *stk);
+void StackPush(struct Stack *stk, Elem_t value);
+void StackRecalloc(struct Stack *stk, size_t ssize);
+
+unsigned long StackError(struct Stack *stk);
+void printErr(unsigned long error);
+
+int checkHash(struct Stack *stk);
+
+struct Description{
+    char *name;
+    char *func;
+    int line;
+    char *file;
+};
+
+struct Stack{
+    UnsignedLL stack_canary_l;
+    UnsignedLL* data_canary_l;
+    Elem_t* data;
+    UnsignedLL* data_canary_r;
+    size_t ssize;
+    size_t capacity;
+    struct Description stk_desc;
+    UnsignedLL errors;
+    UnsignedLL stack_canary_r;
+    UnsignedLL data_hash_sum;
+    UnsignedLL stack_hash_sum;
+};
+
+static char *ErrorNames[] = {
+    "data has NULL pointer",//0
+    "invalid value of stack size",//1
+    "invalid capacity of stack size",//2
+    "size larger then capacity",//3
+    "stack left canary error",//4
+    "stack right canary error",//5
+    "data left canary error",//6
+    "data right canary error"//7
+};
+
+enum Errors {
+    DATA_NULLPTR,//0
+    INVALID_SIZE,//1
+    INVALID_CAPACITY,//2
+    SIZE_LARGER_TH_CAPACITY,//3
+    STACK_CANARY_L_ERR,//4
+    STACK_CANARY_R_ERR,//5
+    DATA_CANARY_L_ERR,//6
+    DATA_CANARY_R_ERR,//7
+    AMOUNT_OF_POSSIBLE_ERRORS /*must be last*/
+};
+
+const UnsignedLL STACK_CANARY_L = 0xBAADBEEF;
+const UnsignedLL STACK_CANARY_R = 0xBAADBABE;
+const UnsignedLL DATA_CANARY_L = 0xDEADBEEF;
+const UnsignedLL DATA_CANARY_R = 0xDEADBABE;
+
+const UnsignedLL DEFAULT_HASH = 6969;
+
+const size_t default_size = 5;
 
 #endif // STACK_H_INCLUDED

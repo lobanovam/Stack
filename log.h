@@ -1,7 +1,6 @@
 #ifndef LOG_H_INCLUDED
 #define LOG_H_INCLUDED
 
-//#define NDEBUG
 
 #ifndef NDEBUG
     #define ASSERT(condition)                                           \
